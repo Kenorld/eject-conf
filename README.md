@@ -28,7 +28,7 @@ the Python Standard Library.
 
 ## Installation
 
-	go get github.com/eject/config
+	go get bitbucket.org/kenorld/eject-conf
 
 ## Operating instructions
 
