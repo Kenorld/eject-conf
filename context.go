@@ -19,6 +19,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/imdario/mergo"
 )
 
 // Context structure handles the parsing of app.conf
@@ -26,12 +28,12 @@ import (
 // If the preferred section does not have the option, the DEFAULT section is
 // checked fallback.
 type Context struct {
-	config  *Config
-	section string // Check this section first, then fall back to DEFAULT
+	config  map[string]interface{}
+	section string
 }
 
 func NewContext() *Context {
-	return &Context{config: NewDefault()}
+	return &Context{config: map[string]interface{}{}}
 }
 
 func LoadContext(confName string, confPaths []string) (*Context, error) {
@@ -45,13 +47,13 @@ func LoadContext(confName string, confPaths []string) (*Context, error) {
 			}
 			continue
 		}
-		ctx.config.Merge(conf)
+		mergo.Merge(&ctx.config, conf)
 	}
 
 	return ctx, nil
 }
 
-func (c *Context) Raw() *Config {
+func (c *Context) Raw() map[string]interface{} {
 	return c.config
 }
 
@@ -60,7 +62,27 @@ func (c *Context) SetSection(section string) {
 }
 
 func (c *Context) SetOption(name, value string) {
-	c.config.AddOption(c.section, name, value)
+	option = c.config[c.section].(map[string]interface{})
+	option[name] = value
+}
+
+func (c *Context) Value(name) interface{} {
+	result, _ = c.ValueWithStatus(name)
+	return result
+}
+func (c *Context) ValueWithStatus(name) (result interface{}, found bool) {
+	fields := strings.Split(name, ".")
+	var value interface{}
+	if option, ok := c.config.(map[string]interface{}); ok {
+		for len(fields) > 0 {
+			field = fields[0]
+			option, ok = option[field].(map[string]interface{})
+			if !ok {
+				break
+			}
+			fields = fields[1:]
+		}
+	}
 }
 
 func (c *Context) Int(option string) (result int, found bool) {
@@ -132,18 +154,4 @@ func (c *Context) Options(prefix string) []string {
 		}
 	}
 	return options
-}
-
-// Helpers
-
-func stripQuotes(s string) string {
-	if s == "" {
-		return s
-	}
-
-	if s[0] == '"' && s[len(s)-1] == '"' {
-		return s[1 : len(s)-1]
-	}
-
-	return s
 }
