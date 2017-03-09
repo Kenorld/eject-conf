@@ -1,157 +1,185 @@
-// Copyright 2016  The "config" Authors
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-package config
+package conf
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+	"time"
 
-	"github.com/imdario/mergo"
+	"github.com/spf13/viper"
 )
 
-// Context structure handles the parsing of app.conf
+// Context structure handles the parsing of app.yaml
 // It has a "preferred" section that is checked first for option queries.
 // If the preferred section does not have the option, the DEFAULT section is
 // checked fallback.
 type Context struct {
-	config  map[string]interface{}
+	vipers  []*viper.Viper
 	section string
 }
 
-func NewContext() *Context {
-	return &Context{config: map[string]interface{}{}}
-}
-
 func LoadContext(confName string, confPaths []string) (*Context, error) {
-	ctx := NewContext()
+	ctx := &Context{vipers: []*viper.Viper{}}
 	for _, confPath := range confPaths {
 		path := filepath.Join(confPath, confName)
-		conf, err := ReadDefault(path)
-		if err != nil {
-			if _, isPathErr := err.(*os.PathError); !isPathErr {
-				return nil, fmt.Errorf("%v: %v", path, err)
-			}
-			continue
+		if _, err := os.Stat(path); err == nil {
+			v := viper.New()
+			v.AddConfigPath(path)
+			ctx.vipers = append(ctx.vipers, v)
 		}
-		mergo.Merge(&ctx.config, conf)
 	}
 
 	return ctx, nil
-}
-
-func (c *Context) Raw() map[string]interface{} {
-	return c.config
 }
 
 func (c *Context) SetSection(section string) {
 	c.section = section
 }
 
-func (c *Context) SetOption(name, value string) {
-	option = c.config[c.section].(map[string]interface{})
-	option[name] = value
-}
-
-func (c *Context) Value(name) interface{} {
-	result, _ = c.ValueWithStatus(name)
-	return result
-}
-func (c *Context) ValueWithStatus(name) (result interface{}, found bool) {
-	fields := strings.Split(name, ".")
-	var value interface{}
-	if option, ok := c.config.(map[string]interface{}); ok {
-		for len(fields) > 0 {
-			field = fields[0]
-			option, ok = option[field].(map[string]interface{})
-			if !ok {
-				break
-			}
-			fields = fields[1:]
+func (c *Context) Get(key string) interface{} {
+	for _, v := range c.vipers {
+		if v.IsSet(c.section + "." + key) {
+			return v.Get(c.section + "." + key)
+		}
+		if v.IsSet(key) {
+			return v.Get(key)
 		}
 	}
+	return nil
 }
-
-func (c *Context) Int(option string) (result int, found bool) {
-	result, err := c.config.Int(c.section, option)
-	if err == nil {
-		return result, true
-	}
-	if _, ok := err.(OptionError); ok {
-		return 0, false
-	}
-
-	// If it wasn't an OptionError, it must have failed to parse.
-	return 0, false
+func (c *Context) GetBool(key string) bool {
+	return c.GetBoolDefault(key, false)
 }
-
-func (c *Context) IntDefault(option string, dfault int) int {
-	if r, found := c.Int(option); found {
-		return r
-	}
-	return dfault
-}
-
-func (c *Context) Bool(option string) (result, found bool) {
-	result, err := c.config.Bool(c.section, option)
-	if err == nil {
-		return result, true
-	}
-	if _, ok := err.(OptionError); ok {
-		return false, false
-	}
-
-	// If it wasn't an OptionError, it must have failed to parse.
-	return false, false
-}
-
-func (c *Context) BoolDefault(option string, dfault bool) bool {
-	if r, found := c.Bool(option); found {
-		return r
-	}
-	return dfault
-}
-
-func (c *Context) String(option string) (result string, found bool) {
-	if r, err := c.config.String(c.section, option); err == nil {
-		return stripQuotes(r), true
-	}
-	return "", false
-}
-
-func (c *Context) StringDefault(option, dfault string) string {
-	if r, found := c.String(option); found {
-		return r
-	}
-	return dfault
-}
-
-func (c *Context) HasSection(section string) bool {
-	return c.config.HasSection(section)
-}
-
-// Options returns all configuration option keys.
-// If a prefix is provided, then that is applied as a filter.
-func (c *Context) Options(prefix string) []string {
-	var options []string
-	keys, _ := c.config.Options(c.section)
-	for _, key := range keys {
-		if strings.HasPrefix(key, prefix) {
-			options = append(options, key)
+func (c *Context) GetBoolDefault(key string, value bool) bool {
+	for _, v := range c.vipers {
+		if v.IsSet(c.section + "." + key) {
+			return v.GetBool(c.section + "." + key)
+		}
+		if v.IsSet(key) {
+			return v.GetBool(key)
 		}
 	}
-	return options
+	return value
+}
+func (c *Context) GetFloat64(key string) float64 {
+	return c.GetFloat64Default(key, 0)
+}
+func (c *Context) GetFloat64Default(key string, value float64) float64 {
+	for _, v := range c.vipers {
+		if v.IsSet(c.section + "." + key) {
+			return v.GetFloat64(c.section + "." + key)
+		}
+		if v.IsSet(key) {
+			return v.GetFloat64(key)
+		}
+	}
+	return value
+}
+func (c *Context) GetInt(key string) int {
+	return c.GetIntDefault(key, 0)
+}
+func (c *Context) GetIntDefault(key string, value int) int {
+	for _, v := range c.vipers {
+		if v.IsSet(c.section + "." + key) {
+			return v.GetInt(c.section + "." + key)
+		}
+		if v.IsSet(key) {
+			return v.GetInt(key)
+		}
+	}
+	return value
+}
+func (c *Context) GetString(key string) string {
+	return c.GetStringDefault(key, "")
+}
+func (c *Context) GetStringDefault(key string, value string) string {
+	for _, v := range c.vipers {
+		if v.IsSet(c.section + "." + key) {
+			return v.GetString(c.section + "." + key)
+		}
+		if v.IsSet(key) {
+			return v.GetString(key)
+		}
+	}
+	return value
+}
+func (c *Context) GetStringMap(key string) map[string]interface{} {
+	return c.GetStringMapDefault(key, map[string]interface{}{})
+}
+func (c *Context) GetStringMapDefault(key string, value map[string]interface{}) map[string]interface{} {
+	for _, v := range c.vipers {
+		if v.IsSet(c.section + "." + key) {
+			return v.GetStringMap(c.section + "." + key)
+		}
+		if v.IsSet(key) {
+			return v.GetStringMap(key)
+		}
+	}
+	return value
+}
+func (c *Context) GetStringMapString(key string) map[string]string {
+	return c.GetStringMapStringDefault(key, map[string]string{})
+}
+func (c *Context) GetStringMapStringDefault(key string, value map[string]string) map[string]string {
+	for _, v := range c.vipers {
+		if v.IsSet(c.section + "." + key) {
+			return v.GetStringMapString(c.section + "." + key)
+		}
+		if v.IsSet(key) {
+			return v.GetStringMapString(key)
+		}
+	}
+	return value
+}
+func (c *Context) GetStringSlice(key string) []string {
+	return c.GetStringSliceDefault(key, []string{})
+}
+func (c *Context) GetStringSliceDefault(key string, value []string) []string {
+	for _, v := range c.vipers {
+		if v.IsSet(c.section + "." + key) {
+			return v.GetStringSlice(c.section + "." + key)
+		}
+		if v.IsSet(key) {
+			return v.GetStringSlice(key)
+		}
+	}
+	return value
+}
+func (c *Context) GetTime(key string) time.Time {
+	return c.GetTimeDefault(key, time.Now())
+}
+func (c *Context) GetTimeDefault(key string, value time.Time) time.Time {
+	for _, v := range c.vipers {
+		if v.IsSet(c.section + "." + key) {
+			return v.GetTime(c.section + "." + key)
+		}
+		if v.IsSet(key) {
+			return v.GetTime(key)
+		}
+	}
+	return value
+}
+func (c *Context) GetDuration(key string) time.Duration {
+	return c.GetDurationDefault(key, time.Duration(0))
+}
+func (c *Context) GetDurationDefault(key string, value time.Duration) time.Duration {
+	for _, v := range c.vipers {
+		if v.IsSet(c.section + "." + key) {
+			return v.GetDuration(c.section + "." + key)
+		}
+		if v.IsSet(key) {
+			return v.GetDuration(key)
+		}
+	}
+	return value
+}
+func (c *Context) IsSet(key string) bool {
+	for _, v := range c.vipers {
+		if v.IsSet(c.section + "." + key) {
+			return true
+		}
+		if v.IsSet(key) {
+			return true
+		}
+	}
+	return false
 }
