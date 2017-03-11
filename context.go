@@ -1,6 +1,7 @@
 package conf
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -20,10 +21,16 @@ type Context struct {
 func LoadContext(confName string, confPaths []string) (*Context, error) {
 	ctx := &Context{vipers: []*viper.Viper{}}
 	for _, confPath := range confPaths {
-		path := filepath.Join(confPath, confName)
+		path := filepath.Join(confPath, confName+".yaml")
 		if _, err := os.Stat(path); err == nil {
 			v := viper.New()
-			v.AddConfigPath(path)
+			v.SetConfigType("yaml")
+			v.SetConfigName(confName)
+			v.AddConfigPath(confPath)
+			err := v.ReadInConfig() // Find and read the config file
+			if err != nil {         // Handle errors reading the config file
+				panic(fmt.Errorf("Fatal error config file: %s \n", err))
+			}
 			ctx.vipers = append(ctx.vipers, v)
 		}
 	}
