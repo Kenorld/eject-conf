@@ -32,7 +32,7 @@ func LoadContext(confName string, confPaths []string) (*Context, error) {
 }
 
 func (c *Context) SetSection(section string) {
-	c.section = section
+	c.section = "[" + section + "]"
 }
 
 func (c *Context) Get(key string) interface{} {
