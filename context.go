@@ -30,6 +30,8 @@ func LoadContext(confName string, confPaths []string) (*Context, error) {
 			err := v.ReadInConfig() // Find and read the config file
 			if err != nil {         // Handle errors reading the config file
 				panic(fmt.Errorf("Fatal error config file: %s \n", err))
+			} else {
+				fmt.Println("Load conf from path: " + confPath)
 			}
 			ctx.vipers = append(ctx.vipers, v)
 		}
